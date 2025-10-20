@@ -174,30 +174,62 @@ async function handleCommand(chatId, text, messageId, env) {
     case '/status':
       try {
         addLog('INFO', '检查机器人状态');
+        
+        // 检查环境变量
+        const hasToken = env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_BOT_TOKEN !== 'YOUR_BOT_TOKEN';
+        const hasApiUrl = env.PANSOU_API_URL && env.PANSOU_API_URL !== 'PANSOUAPIURL';
+        const apiUrl = env.PANSOU_API_URL || 'https://api.pansou.com';
+        
+        addLog('DEBUG', '环境变量检查', { 
+          hasToken, 
+          hasApiUrl, 
+          tokenLength: env.TELEGRAM_BOT_TOKEN?.length || 0,
+          apiUrl: env.PANSOU_API_URL || 'default'
+        });
+        
         // 检查 PanSou API 健康状态
-        const healthResponse = await fetch(`${env.PANSOU_API_URL || 'https://api.pansou.com'}/api/health`);
+        const healthResponse = await fetch(`${apiUrl}/api/health`);
         const healthData = await healthResponse.json();
         
         addLog('INFO', 'API 健康检查成功', { status: healthData.status });
         
-        await sendMessage(chatId, 
-          `🤖 *机器人状态*\n\n` +
-          `✅ 运行正常\n` +
-          `🔗 API: ${env.PANSOU_API_URL || 'https://api.pansou.com'}\n` +
-          `📊 插件数量: ${healthData.plugin_count || '未知'}\n` +
-          `📺 频道数量: ${healthData.channels_count || '未知'}\n` +
-          `🔐 认证状态: ${healthData.auth_enabled ? '已启用' : '未启用'}\n` +
-          `⏰ 时间: ${new Date().toLocaleString('zh-CN')}\n\n` +
-          `准备为您搜索资源！`, 
-          messageId, env
-        );
+        let statusText = `🤖 *机器人状态*\n\n`;
+        statusText += `✅ 运行正常\n`;
+        statusText += `🔗 API: ${apiUrl}\n`;
+        
+        if (!hasToken) {
+          statusText += `⚠️ Bot Token: 未设置或无效\n`;
+        } else {
+          statusText += `✅ Bot Token: 已设置\n`;
+        }
+        
+        if (!hasApiUrl) {
+          statusText += `⚠️ API URL: 使用默认值\n`;
+        } else {
+          statusText += `✅ API URL: 已设置\n`;
+        }
+        
+        statusText += `📊 插件数量: ${healthData.plugin_count || '未知'}\n`;
+        statusText += `📺 频道数量: ${healthData.channels_count || '未知'}\n`;
+        statusText += `🔐 认证状态: ${healthData.auth_enabled ? '已启用' : '未启用'}\n`;
+        statusText += `⏰ 时间: ${new Date().toLocaleString('zh-CN')}\n\n`;
+        
+        if (!hasToken || !hasApiUrl) {
+          statusText += `⚠️ *环境变量未正确设置*\n`;
+          statusText += `请在 Cloudflare Workers 控制台设置环境变量\n`;
+        } else {
+          statusText += `准备为您搜索资源！`;
+        }
+        
+        await sendMessage(chatId, statusText, messageId, env);
       } catch (error) {
         addLog('ERROR', 'API 健康检查失败', { error: error.message });
+        const apiUrl = env.PANSOU_API_URL || 'https://api.pansou.com';
         await sendMessage(chatId, 
           `🤖 *机器人状态*\n\n` +
           `✅ 运行正常\n` +
           `❌ API 连接异常\n` +
-          `🔗 API: ${env.PANSOU_API_URL || 'https://api.pansou.com'}\n` +
+          `🔗 API: ${apiUrl}\n` +
           `⏰ 时间: ${new Date().toLocaleString('zh-CN')}\n\n` +
           `请稍后重试或联系管理员`, 
           messageId, env
@@ -243,6 +275,48 @@ async function handleCommand(chatId, text, messageId, env) {
       }
       break;
       
+    case '/test':
+      try {
+        const testQuery = '测试';
+        addLog('INFO', '开始测试搜索', { query: testQuery });
+        
+        const testResults = await callPanSouAPI(testQuery, {}, env);
+        addLog('DEBUG', '测试搜索结果', { 
+          hasResults: !!(testResults.merged_by_type || testResults.results),
+          resultKeys: Object.keys(testResults),
+          total: testResults.total,
+          mergedByTypeKeys: testResults.merged_by_type ? Object.keys(testResults.merged_by_type) : 'none',
+          resultsLength: testResults.results ? testResults.results.length : 'none'
+        });
+        
+        let testText = `🧪 *API 测试结果*\n\n`;
+        testText += `🔗 API: ${env.PANSOU_API_URL || 'https://api.pansou.com'}\n`;
+        testText += `📊 响应键: ${Object.keys(testResults).join(', ')}\n`;
+        testText += `📈 总数: ${testResults.total || '未知'}\n`;
+        testText += `📁 类型数: ${testResults.merged_by_type ? Object.keys(testResults.merged_by_type).length : '无'}\n`;
+        testText += `📋 结果数: ${testResults.results ? testResults.results.length : '无'}\n\n`;
+        
+        if (testResults.merged_by_type) {
+          testText += `*按类型分组:*\n`;
+          Object.keys(testResults.merged_by_type).forEach(type => {
+            testText += `• ${getTypeDisplayName(type)}: ${testResults.merged_by_type[type].length}个\n`;
+          });
+        }
+        
+        if (testResults.results && testResults.results.length > 0) {
+          testText += `\n*前3个结果:*\n`;
+          testResults.results.slice(0, 3).forEach((item, index) => {
+            testText += `${index + 1}. ${item.title || item.note || '无标题'}\n`;
+          });
+        }
+        
+        await sendMessage(chatId, testText, messageId, env);
+      } catch (error) {
+        addLog('ERROR', '测试搜索失败', { error: error.message });
+        await sendMessage(chatId, `❌ 测试失败: ${error.message}`, messageId, env);
+      }
+      break;
+      
     default:
       await sendMessage(chatId, '未知命令，请使用 /help 查看可用命令', messageId, env);
   }
@@ -274,11 +348,15 @@ async function performSearch(chatId, query, messageId, env) {
     addLog('DEBUG', '调用 PanSou API', { query });
     const searchResults = await callPanSouAPI(query, {}, env);
     
-    if (searchResults && searchResults.merged_by_type) {
-      addLog('INFO', '搜索成功', { query, resultCount: Object.keys(searchResults.merged_by_type).length });
+    if (searchResults && (searchResults.merged_by_type || searchResults.results)) {
+      const resultCount = searchResults.merged_by_type ? 
+        Object.keys(searchResults.merged_by_type).length : 
+        (searchResults.results ? searchResults.results.length : 0);
+      
+      addLog('INFO', '搜索成功', { query, resultCount, hasMergedByType: !!searchResults.merged_by_type, hasResults: !!searchResults.results });
       await sendSearchResultsWithButtons(chatId, query, searchResults, searchingMsg.message_id, env);
     } else {
-      addLog('WARN', '搜索无结果', { query });
+      addLog('WARN', '搜索无结果', { query, searchResults: searchResults ? Object.keys(searchResults) : 'null' });
       await editMessage(chatId, searchingMsg.message_id, 
         `❌ 搜索 "${query}" 未找到结果\n\n请尝试其他关键词或检查拼写。`, env);
     }
@@ -355,7 +433,13 @@ async function callPanSouAPI(query, options = {}, env) {
   }
   
   const result = await response.json();
-  addLog('DEBUG', 'API 响应成功', { hasResults: !!result.merged_by_type, total: result.total });
+  addLog('DEBUG', 'API 响应成功', { 
+    hasResults: !!result.merged_by_type, 
+    total: result.total,
+    hasResultsArray: !!result.results,
+    resultKeys: Object.keys(result),
+    mergedByTypeKeys: result.merged_by_type ? Object.keys(result.merged_by_type) : 'none'
+  });
   
   return result;
 }
@@ -578,37 +662,73 @@ async function handleRefreshCallback(chatId, messageId, params, env) {
  * 发送带按钮的搜索结果
  */
 async function sendSearchResultsWithButtons(chatId, query, results, messageId, env, selectedType = null, currentPage = 1) {
-  const { merged_by_type, total } = results;
+  const { merged_by_type, total, results: resultsArray } = results;
   const itemsPerPage = 5;
   
-  // 获取所有可用的网盘类型
-  const availableTypes = Object.keys(merged_by_type).filter(type => 
-    merged_by_type[type] && merged_by_type[type].length > 0
-  );
+  addLog('DEBUG', '处理搜索结果', { 
+    hasMergedByType: !!merged_by_type, 
+    hasResultsArray: !!resultsArray,
+    total,
+    selectedType,
+    currentPage
+  });
   
-  // 如果指定了类型，只显示该类型的结果
-  const displayTypes = selectedType ? [selectedType] : availableTypes;
+  let availableTypes = [];
+  let allItems = [];
+  
+  // 处理不同的 API 响应格式
+  if (merged_by_type) {
+    // 标准格式：按类型分组
+    availableTypes = Object.keys(merged_by_type).filter(type => 
+      merged_by_type[type] && merged_by_type[type].length > 0
+    );
+    
+    const displayTypes = selectedType ? [selectedType] : availableTypes;
+    
+    // 收集所有要显示的项目
+    for (const type of displayTypes) {
+      if (merged_by_type[type] && merged_by_type[type].length > 0) {
+        const items = merged_by_type[type].map((resource, index) => ({
+          ...resource,
+          type,
+          originalIndex: index
+        }));
+        allItems = allItems.concat(items);
+      }
+    }
+  } else if (resultsArray && resultsArray.length > 0) {
+    // 备用格式：直接结果数组
+    addLog('DEBUG', '使用结果数组格式', { resultCount: resultsArray.length });
+    
+    // 从结果中提取类型信息
+    const typeMap = {};
+    resultsArray.forEach((item, index) => {
+      const type = item.cloud_type || 'other';
+      if (!typeMap[type]) {
+        typeMap[type] = [];
+      }
+      typeMap[type].push({
+        ...item,
+        type,
+        originalIndex: index
+      });
+    });
+    
+    availableTypes = Object.keys(typeMap);
+    const displayTypes = selectedType ? [selectedType] : availableTypes;
+    
+    for (const type of displayTypes) {
+      if (typeMap[type] && typeMap[type].length > 0) {
+        allItems = allItems.concat(typeMap[type]);
+      }
+    }
+  }
   
   let responseText = `🔍 *搜索结果: "${query}"*\n`;
   if (selectedType) {
     responseText += `📁 类型: ${getTypeDisplayName(selectedType)}\n`;
   }
-  responseText += `📊 总计: ${total || '未知'} 个结果\n\n`;
-  
-  let totalResults = 0;
-  let allItems = [];
-  
-  // 收集所有要显示的项目
-  for (const type of displayTypes) {
-    if (merged_by_type[type] && merged_by_type[type].length > 0) {
-      const items = merged_by_type[type].map((resource, index) => ({
-        ...resource,
-        type,
-        originalIndex: index
-      }));
-      allItems = allItems.concat(items);
-    }
-  }
+  responseText += `📊 总计: ${total || allItems.length || '未知'} 个结果\n\n`;
   
   // 分页
   const totalPages = Math.ceil(allItems.length / itemsPerPage);
