@@ -12,4 +12,4 @@ name = "pansou-tg-bot-staging"
 [vars]
 # 在 Cloudflare Workers 控制台中设置这些环境变量
 # TELEGRAM_BOT_TOKEN = "your_bot_token"
-# PANSOU_API_URL = "https://api.pansou.com"
+# PANSOU_API_URL = "https://find.966001.xyz"

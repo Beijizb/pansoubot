@@ -30,7 +30,7 @@
 
 ```
 TELEGRAM_BOT_TOKEN = "你的机器人Token"
-PANSOU_API_URL = "https://api.pansou.com"
+PANSOU_API_URL = "https://find.966001.xyz"
 ```
 
 ### 3. 部署到 Cloudflare Workers

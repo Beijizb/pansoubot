@@ -20,7 +20,7 @@ fi
 
 if [ -z "$PANSOU_API_URL" ]; then
     echo "⚠️  警告: 未设置 PANSOU_API_URL，将使用默认值"
-    export PANSOU_API_URL="https://api.pansou.com"
+    export PANSOU_API_URL="https://find.966001.xyz"
 fi
 
 echo "📦 安装依赖..."

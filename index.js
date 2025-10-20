@@ -178,7 +178,7 @@ async function handleCommand(chatId, text, messageId, env) {
         // 检查环境变量
         const hasToken = env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_BOT_TOKEN !== 'YOUR_BOT_TOKEN';
         const hasApiUrl = env.PANSOU_API_URL && env.PANSOU_API_URL !== 'PANSOUAPIURL';
-        const apiUrl = env.PANSOU_API_URL || 'https://api.pansou.com';
+        const apiUrl = env.PANSOU_API_URL || 'https://find.966001.xyz';
         
         addLog('DEBUG', '环境变量检查', { 
           hasToken, 
@@ -224,7 +224,7 @@ async function handleCommand(chatId, text, messageId, env) {
         await sendMessage(chatId, statusText, messageId, env);
       } catch (error) {
         addLog('ERROR', 'API 健康检查失败', { error: error.message });
-        const apiUrl = env.PANSOU_API_URL || 'https://api.pansou.com';
+        const apiUrl = env.PANSOU_API_URL || 'https://find.966001.xyz';
         await sendMessage(chatId, 
           `🤖 *机器人状态*\n\n` +
           `✅ 运行正常\n` +
@@ -290,7 +290,7 @@ async function handleCommand(chatId, text, messageId, env) {
         });
         
         let testText = `🧪 *API 测试结果*\n\n`;
-        testText += `🔗 API: ${env.PANSOU_API_URL || 'https://api.pansou.com'}\n`;
+        testText += `🔗 API: ${env.PANSOU_API_URL || 'https://find.966001.xyz'}\n`;
         testText += `📊 响应键: ${Object.keys(testResults).join(', ')}\n`;
         testText += `📈 总数: ${testResults.total || '未知'}\n`;
         testText += `📁 类型数: ${testResults.merged_by_type ? Object.keys(testResults.merged_by_type).length : '无'}\n`;
@@ -374,7 +374,7 @@ async function performSearch(chatId, query, messageId, env) {
  * 调用 PanSou API
  */
 async function callPanSouAPI(query, options = {}, env) {
-  const apiUrl = env.PANSOU_API_URL || 'https://api.pansou.com';
+  const apiUrl = env.PANSOU_API_URL || 'https://find.966001.xyz';
   addLog('DEBUG', '准备调用 PanSou API', { apiUrl, query });
   
   const requestBody = {
@@ -434,12 +434,21 @@ async function callPanSouAPI(query, options = {}, env) {
   
   const result = await response.json();
   addLog('DEBUG', 'API 响应成功', { 
-    hasResults: !!result.merged_by_type, 
-    total: result.total,
-    hasResultsArray: !!result.results,
+    code: result.code,
+    message: result.message,
+    hasData: !!result.data,
+    hasResults: !!(result.data && result.data.merged_by_type), 
+    total: result.data ? result.data.total : result.total,
+    hasResultsArray: !!(result.data && result.data.results) || !!result.results,
     resultKeys: Object.keys(result),
-    mergedByTypeKeys: result.merged_by_type ? Object.keys(result.merged_by_type) : 'none'
+    dataKeys: result.data ? Object.keys(result.data) : 'none',
+    mergedByTypeKeys: result.data && result.data.merged_by_type ? Object.keys(result.data.merged_by_type) : (result.merged_by_type ? Object.keys(result.merged_by_type) : 'none')
   });
+  
+  // 处理新的 API 响应格式
+  if (result.code === 0 && result.data) {
+    return result.data;
+  }
   
   return result;
 }
