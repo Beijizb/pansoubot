@@ -745,6 +745,8 @@ async function sendSearchResultsWithButtons(chatId, query, results, messageId, e
   const endIndex = startIndex + itemsPerPage;
   const pageItems = allItems.slice(startIndex, endIndex);
   
+  let totalResults = 0; // 初始化 totalResults 变量
+  
   // 显示当前页的项目
   if (pageItems.length > 0) {
     pageItems.forEach((item, index) => {
