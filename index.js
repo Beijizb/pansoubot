@@ -3,25 +3,21 @@
  * 网盘资源搜索机器人
  */
 
-// 环境变量
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || 'YOUR_BOT_TOKEN';
-const PANSOU_API_URL = process.env.PANSOU_API_URL || 'https://api.pansou.com';
-
 /**
  * 处理 Telegram Webhook 请求
  */
-async function handleTelegramWebhook(request) {
+async function handleTelegramWebhook(request, env) {
   try {
     const update = await request.json();
     
     // 处理消息
     if (update.message) {
-      await handleMessage(update.message);
+      await handleMessage(update.message, env);
     }
     
     // 处理回调查询
     if (update.callback_query) {
-      await handleCallbackQuery(update.callback_query);
+      await handleCallbackQuery(update.callback_query, env);
     }
     
     return new Response('OK', { status: 200 });
@@ -34,7 +30,7 @@ async function handleTelegramWebhook(request) {
 /**
  * 处理消息
  */
-async function handleMessage(message) {
+async function handleMessage(message, env) {
   const chatId = message.chat.id;
   const text = message.text;
   const messageId = message.message_id;
@@ -46,17 +42,17 @@ async function handleMessage(message) {
   
   // 处理命令
   if (text && text.startsWith('/')) {
-    await handleCommand(chatId, text, messageId);
+    await handleCommand(chatId, text, messageId, env);
   } else if (text) {
     // 处理搜索查询
-    await handleSearch(chatId, text, messageId);
+    await handleSearch(chatId, text, messageId, env);
   }
 }
 
 /**
  * 处理命令
  */
-async function handleCommand(chatId, text, messageId) {
+async function handleCommand(chatId, text, messageId, env) {
   const command = text.split(' ')[0].toLowerCase();
   
   switch (command) {
@@ -71,7 +67,7 @@ async function handleCommand(chatId, text, messageId) {
         `• /s <关键词> - 快捷搜索\n` +
         `• /status - 查看机器人状态\n\n` +
         `开始搜索吧！🚀`, 
-        messageId
+        messageId, env
       );
       break;
       
@@ -95,97 +91,97 @@ async function handleCommand(chatId, text, messageId) {
         `• 天翼云盘、115网盘、PikPak\n` +
         `• 迅雷网盘、磁力链接等\n\n` +
         `支持搜索各种网盘资源！`, 
-        messageId
+        messageId, env
       );
       break;
       
     case '/search':
       const searchQuery = text.replace('/search', '').trim();
       if (searchQuery) {
-        await performSearch(chatId, searchQuery, messageId);
+        await performSearch(chatId, searchQuery, messageId, env);
       } else {
-        await sendMessage(chatId, '请提供搜索关键词，例如：/search 电影名称', messageId);
+        await sendMessage(chatId, '请提供搜索关键词，例如：/search 电影名称', messageId, env);
       }
       break;
       
     case '/s':
       const shortSearchQuery = text.replace('/s', '').trim();
       if (shortSearchQuery) {
-        await performSearch(chatId, shortSearchQuery, messageId);
+        await performSearch(chatId, shortSearchQuery, messageId, env);
       } else {
-        await sendMessage(chatId, '请提供搜索关键词，例如：/s 电影名称', messageId);
+        await sendMessage(chatId, '请提供搜索关键词，例如：/s 电影名称', messageId, env);
       }
       break;
       
     case '/status':
       try {
         // 检查 PanSou API 健康状态
-        const healthResponse = await fetch(`${PANSOU_API_URL}/api/health`);
+        const healthResponse = await fetch(`${env.PANSOU_API_URL || 'https://api.pansou.com'}/api/health`);
         const healthData = await healthResponse.json();
         
         await sendMessage(chatId, 
           `🤖 *机器人状态*\n\n` +
           `✅ 运行正常\n` +
-          `🔗 API: ${PANSOU_API_URL}\n` +
+          `🔗 API: ${env.PANSOU_API_URL || 'https://api.pansou.com'}\n` +
           `📊 插件数量: ${healthData.plugin_count || '未知'}\n` +
           `📺 频道数量: ${healthData.channels_count || '未知'}\n` +
           `🔐 认证状态: ${healthData.auth_enabled ? '已启用' : '未启用'}\n` +
           `⏰ 时间: ${new Date().toLocaleString('zh-CN')}\n\n` +
           `准备为您搜索资源！`, 
-          messageId
+          messageId, env
         );
       } catch (error) {
         await sendMessage(chatId, 
           `🤖 *机器人状态*\n\n` +
           `✅ 运行正常\n` +
           `❌ API 连接异常\n` +
-          `🔗 API: ${PANSOU_API_URL}\n` +
+          `🔗 API: ${env.PANSOU_API_URL || 'https://api.pansou.com'}\n` +
           `⏰ 时间: ${new Date().toLocaleString('zh-CN')}\n\n` +
           `请稍后重试或联系管理员`, 
-          messageId
+          messageId, env
         );
       }
       break;
       
     default:
-      await sendMessage(chatId, '未知命令，请使用 /help 查看可用命令', messageId);
+      await sendMessage(chatId, '未知命令，请使用 /help 查看可用命令', messageId, env);
   }
 }
 
 /**
  * 处理搜索查询
  */
-async function handleSearch(chatId, query, messageId) {
+async function handleSearch(chatId, query, messageId, env) {
   if (query.length < 2) {
-    await sendMessage(chatId, '搜索关键词太短，请至少输入2个字符', messageId);
+    await sendMessage(chatId, '搜索关键词太短，请至少输入2个字符', messageId, env);
     return;
   }
   
-  await performSearch(chatId, query, messageId);
+  await performSearch(chatId, query, messageId, env);
 }
 
 /**
  * 执行搜索
  */
-async function performSearch(chatId, query, messageId) {
+async function performSearch(chatId, query, messageId, env) {
   try {
     // 发送搜索中消息
-    const searchingMsg = await sendMessage(chatId, `🔍 正在搜索 "${query}"...`, messageId);
+    const searchingMsg = await sendMessage(chatId, `🔍 正在搜索 "${query}"...`, messageId, env);
     
     // 调用 PanSou API
-    const searchResults = await callPanSouAPI(query);
+    const searchResults = await callPanSouAPI(query, {}, env);
     
     if (searchResults && searchResults.merged_by_type) {
-      await sendSearchResults(chatId, query, searchResults, searchingMsg.message_id);
+      await sendSearchResults(chatId, query, searchResults, searchingMsg.message_id, env);
     } else {
       await editMessage(chatId, searchingMsg.message_id, 
-        `❌ 搜索 "${query}" 未找到结果\n\n请尝试其他关键词或检查拼写。`);
+        `❌ 搜索 "${query}" 未找到结果\n\n请尝试其他关键词或检查拼写。`, env);
     }
   } catch (error) {
     console.error('搜索错误:', error);
     await sendMessage(chatId, 
       `❌ 搜索时发生错误，请稍后重试\n\n错误信息: ${error.message}`, 
-      messageId
+      messageId, env
     );
   }
 }
@@ -193,7 +189,7 @@ async function performSearch(chatId, query, messageId) {
 /**
  * 调用 PanSou API
  */
-async function callPanSouAPI(query, options = {}) {
+async function callPanSouAPI(query, options = {}, env) {
   const requestBody = {
     kw: query,
     res: options.res || 'merge',
@@ -213,7 +209,7 @@ async function callPanSouAPI(query, options = {}) {
     }
   });
   
-  const response = await fetch(`${PANSOU_API_URL}/api/search`, {
+  const response = await fetch(`${env.PANSOU_API_URL || 'https://api.pansou.com'}/api/search`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -249,7 +245,7 @@ async function callPanSouAPI(query, options = {}) {
 /**
  * 发送搜索结果
  */
-async function sendSearchResults(chatId, query, results, messageId) {
+async function sendSearchResults(chatId, query, results, messageId, env) {
   const { merged_by_type, total } = results;
   let responseText = `🔍 *搜索结果: "${query}"*\n`;
   
@@ -329,7 +325,7 @@ async function sendSearchResults(chatId, query, results, messageId) {
     responseText = responseText.substring(0, 3900) + '\n\n... (结果过长，已截断)';
   }
   
-  await editMessage(chatId, messageId, responseText);
+  await editMessage(chatId, messageId, responseText, env);
 }
 
 /**
@@ -359,13 +355,13 @@ function getTypeDisplayName(type) {
 /**
  * 处理回调查询
  */
-async function handleCallbackQuery(callbackQuery) {
+async function handleCallbackQuery(callbackQuery, env) {
   const chatId = callbackQuery.message.chat.id;
   const messageId = callbackQuery.message.message_id;
   const data = callbackQuery.data;
   
   // 回答回调查询
-  await answerCallbackQuery(callbackQuery.id, '处理中...');
+  await answerCallbackQuery(callbackQuery.id, '处理中...', env);
   
   // 这里可以添加更多回调查询处理逻辑
 }
@@ -373,7 +369,7 @@ async function handleCallbackQuery(callbackQuery) {
 /**
  * 发送消息
  */
-async function sendMessage(chatId, text, replyToMessageId = null) {
+async function sendMessage(chatId, text, replyToMessageId = null, env) {
   const payload = {
     chat_id: chatId,
     text: text,
@@ -385,7 +381,7 @@ async function sendMessage(chatId, text, replyToMessageId = null) {
     payload.reply_to_message_id = replyToMessageId;
   }
   
-  const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+  const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -403,7 +399,7 @@ async function sendMessage(chatId, text, replyToMessageId = null) {
 /**
  * 编辑消息
  */
-async function editMessage(chatId, messageId, text) {
+async function editMessage(chatId, messageId, text, env) {
   const payload = {
     chat_id: chatId,
     message_id: messageId,
@@ -412,7 +408,7 @@ async function editMessage(chatId, messageId, text) {
     disable_web_page_preview: true
   };
   
-  const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/editMessageText`, {
+  const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/editMessageText`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -430,13 +426,13 @@ async function editMessage(chatId, messageId, text) {
 /**
  * 回答回调查询
  */
-async function answerCallbackQuery(callbackQueryId, text) {
+async function answerCallbackQuery(callbackQueryId, text, env) {
   const payload = {
     callback_query_id: callbackQueryId,
     text: text
   };
   
-  const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
+  const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -476,7 +472,7 @@ export default {
     // Telegram Webhook
     if (path === '/webhook' || path === '/') {
       if (request.method === 'POST') {
-        return handleTelegramWebhook(request);
+        return handleTelegramWebhook(request, env);
       } else {
         return new Response('PanSou Telegram Bot is running!', { status: 200 });
       }
