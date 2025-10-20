@@ -503,10 +503,8 @@ async function sendSearchResults(chatId, query, results, messageId, env) {
         }
         
         if (resource.url) {
-          // 缩短链接显示
-          const shortUrl = resource.url.length > 40 ? 
-            resource.url.substring(0, 37) + '...' : resource.url;
-          responseText += `   🔗 ${shortUrl}\n`;
+          // 显示完整链接
+          responseText += `   🔗 ${resource.url}\n`;
         }
         
         totalResults++;
@@ -590,6 +588,16 @@ async function handleCallbackQuery(callbackQuery, env) {
       case 'refresh':
         await handleRefreshCallback(chatId, messageId, params, env);
         break;
+      case 'new_search':
+        await handleNewSearchCallback(chatId, messageId, env);
+        break;
+      case 'help':
+        await handleHelpCallback(chatId, messageId, env);
+        break;
+      case 'noop':
+        // 无操作按钮，只回答回调查询
+        await answerCallbackQuery(callbackQuery.id, '', env);
+        break;
       default:
         addLog('WARN', '未知的回调操作', { action, data });
         await answerCallbackQuery(callbackQuery.id, '未知操作', env);
@@ -664,6 +672,65 @@ async function handleRefreshCallback(chatId, messageId, params, env) {
   } catch (error) {
     addLog('ERROR', '刷新回调失败', { error: error.message, query, type });
     await editMessage(chatId, messageId, `❌ 刷新失败: ${error.message}`, env);
+  }
+}
+
+/**
+ * 处理新搜索回调
+ */
+async function handleNewSearchCallback(chatId, messageId, env) {
+  addLog('INFO', '处理新搜索回调', { chatId });
+  
+  try {
+    await editMessage(chatId, messageId, 
+      `🔍 *开始新搜索*\n\n` +
+      `请发送您要搜索的关键词，例如：\n` +
+      `• 电影名称\n` +
+      `• 软件名称\n` +
+      `• 学习资料\n\n` +
+      `💡 *搜索提示：*\n` +
+      `• 使用具体的关键词\n` +
+      `• 可以包含年份、版本等信息\n` +
+      `• 支持中英文搜索`, 
+      env
+    );
+  } catch (error) {
+    addLog('ERROR', '新搜索回调失败', { error: error.message });
+    await editMessage(chatId, messageId, `❌ 操作失败: ${error.message}`, env);
+  }
+}
+
+/**
+ * 处理帮助回调
+ */
+async function handleHelpCallback(chatId, messageId, env) {
+  addLog('INFO', '处理帮助回调', { chatId });
+  
+  try {
+    await editMessage(chatId, messageId, 
+      `📖 *搜索帮助*\n\n` +
+      `*搜索方式：*\n` +
+      `• 直接发送关键词\n` +
+      `• /search <关键词>\n` +
+      `• /s <关键词>\n\n` +
+      `*按钮功能：*\n` +
+      `• 🔄 刷新 - 重新搜索当前关键词\n` +
+      `• 🔙 返回全部 - 显示所有类型结果\n` +
+      `• 🔍 新搜索 - 开始新的搜索\n` +
+      `• ❓ 帮助 - 显示此帮助信息\n\n` +
+      `*支持的网盘：*\n` +
+      `• 百度网盘、阿里云盘、夸克网盘\n` +
+      `• 天翼云盘、115网盘、PikPak\n` +
+      `• 迅雷网盘、磁力链接等\n\n` +
+      `*搜索技巧：*\n` +
+      `• 使用具体关键词效果更好\n` +
+      `• 可以尝试不同的表达方式\n` +
+      `• 支持按网盘类型筛选`, 
+      env
+    );
+  } catch (error) {
+    addLog('ERROR', '帮助回调失败', { error: error.message });
+    await editMessage(chatId, messageId, `❌ 操作失败: ${error.message}`, env);
   }
 }
 
@@ -776,9 +843,8 @@ async function sendSearchResultsWithButtons(chatId, query, results, messageId, e
       }
       
       if (item.url) {
-        const shortUrl = item.url.length > 35 ? 
-          item.url.substring(0, 32) + '...' : item.url;
-        responseText += `   🔗 ${shortUrl}\n`;
+        // 显示完整链接，不进行截断
+        responseText += `   🔗 ${item.url}\n`;
       }
       
       responseText += '\n';
@@ -809,34 +875,33 @@ async function sendSearchResultsWithButtons(chatId, query, results, messageId, e
 function createSearchKeyboard(query, availableTypes, selectedType, currentPage, totalPages) {
   const keyboard = [];
   
-  // 类型选择按钮（第一行）
+  // 类型选择按钮
   if (availableTypes.length > 1) {
-    const typeButtons = [];
-    availableTypes.slice(0, 3).forEach(type => {
-      const isSelected = selectedType === type;
-      typeButtons.push({
-        text: `${isSelected ? '✅' : ''}${getTypeDisplayName(type)}`,
-        callback_data: `type:${query}:${type}:${currentPage}`
-      });
-    });
-    keyboard.push(typeButtons);
-    
-    // 如果类型超过3个，添加更多按钮
-    if (availableTypes.length > 3) {
-      const moreTypeButtons = [];
-      availableTypes.slice(3, 6).forEach(type => {
+    // 每行最多2个按钮，避免按钮太挤
+    for (let i = 0; i < availableTypes.length; i += 2) {
+      const typeButtons = [];
+      const typesInRow = availableTypes.slice(i, i + 2);
+      
+      typesInRow.forEach(type => {
         const isSelected = selectedType === type;
-        moreTypeButtons.push({
-          text: `${isSelected ? '✅' : ''}${getTypeDisplayName(type)}`,
+        const displayName = getTypeDisplayName(type);
+        // 限制按钮文本长度
+        const buttonText = displayName.length > 8 ? 
+          `${isSelected ? '✅' : ''}${displayName.substring(0, 6)}...` : 
+          `${isSelected ? '✅' : ''}${displayName}`;
+        
+        typeButtons.push({
+          text: buttonText,
           callback_data: `type:${query}:${type}:${currentPage}`
         });
       });
-      keyboard.push(moreTypeButtons);
+      
+      keyboard.push(typeButtons);
     }
     
     // 全部类型按钮
     keyboard.push([{
-      text: selectedType ? '🔄 显示全部' : '✅ 全部类型',
+      text: selectedType ? '🔄 显示全部类型' : '✅ 全部类型',
       callback_data: `search:${query}::${currentPage}`
     }]);
   }
@@ -845,6 +910,7 @@ function createSearchKeyboard(query, availableTypes, selectedType, currentPage, 
   if (totalPages > 1) {
     const pageButtons = [];
     
+    // 上一页按钮
     if (currentPage > 1) {
       pageButtons.push({
         text: '⬅️ 上一页',
@@ -852,11 +918,13 @@ function createSearchKeyboard(query, availableTypes, selectedType, currentPage, 
       });
     }
     
+    // 页码显示（居中）
     pageButtons.push({
-      text: `${currentPage}/${totalPages}`,
+      text: `📄 ${currentPage}/${totalPages}`,
       callback_data: 'noop'
     });
     
+    // 下一页按钮
     if (currentPage < totalPages) {
       pageButtons.push({
         text: '下一页 ➡️',
@@ -867,21 +935,41 @@ function createSearchKeyboard(query, availableTypes, selectedType, currentPage, 
     keyboard.push(pageButtons);
   }
   
-  // 操作按钮
-  const actionButtons = [];
-  actionButtons.push({
+  // 操作按钮 - 第一行
+  const actionButtons1 = [];
+  
+  // 刷新按钮
+  actionButtons1.push({
     text: '🔄 刷新',
     callback_data: `refresh:${query}:${selectedType || ''}`
   });
   
+  // 返回按钮 - 如果有选中的类型，显示返回全部
   if (selectedType) {
-    actionButtons.push({
-      text: '🔍 重新搜索',
+    actionButtons1.push({
+      text: '🔙 返回全部',
       callback_data: `search:${query}::1`
     });
   }
   
-  keyboard.push(actionButtons);
+  keyboard.push(actionButtons1);
+  
+  // 操作按钮 - 第二行
+  const actionButtons2 = [];
+  
+  // 新搜索按钮
+  actionButtons2.push({
+    text: '🔍 新搜索',
+    callback_data: 'new_search'
+  });
+  
+  // 帮助按钮
+  actionButtons2.push({
+    text: '❓ 帮助',
+    callback_data: 'help'
+  });
+  
+  keyboard.push(actionButtons2);
   
   return keyboard;
 }
