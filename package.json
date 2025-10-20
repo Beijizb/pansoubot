@@ -1,0 +1,17 @@
+{
+  "name": "pansou-tg-bot",
+  "version": "1.0.0",
+  "description": "Telegram bot for PanSou API search",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "keywords": ["telegram", "bot", "pansou", "search", "cloudflare"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20231218.0",
+    "wrangler": "^3.19.0"
+  }
+}
